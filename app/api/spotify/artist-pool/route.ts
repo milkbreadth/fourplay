@@ -10,6 +10,7 @@ interface SpotifyArtist {
   external_urls: { spotify: string };
 }
 
+
 async function getLastfmSimilar(
   artistName: string,
   apiKey: string
@@ -101,19 +102,28 @@ export async function GET() {
 
   console.log(`all similar names size: ${allSimilarNames.size}`)
 
-  // 4. Search Spotify for each similar artist name to get full artist data
-  const spotifySearchResults = await Promise.all(
-    Array.from(allSimilarNames).map(async (name) => {
-      const params = new URLSearchParams({ q: name, type: "artist", limit: "1" });
-      const res = await fetch(`https://api.spotify.com/v1/search?${params}`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-        next: { revalidate: 0 },
-      });
-      if (!res.ok) return null;
-      const data = await res.json();
-      return (data?.artists?.items?.[0] as SpotifyArtist) ?? null;
-    })
-  );
+  // 4. Search Spotify for each similar artist name in batches to avoid rate limits
+  async function searchSpotify(name: string): Promise<SpotifyArtist | null> {
+    const params = new URLSearchParams({ q: name, type: "artist", limit: "1" });
+    const res = await fetch(`https://api.spotify.com/v1/search?${params}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      next: { revalidate: 0 },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return (data?.artists?.items?.[0] as SpotifyArtist) ?? null;
+  }
+
+  const BATCH_SIZE = 50;
+  const namesArr = Array.from(allSimilarNames);
+  const spotifySearchResults: (SpotifyArtist | null)[] = [];
+
+  for (let i = 0; i < namesArr.length; i += BATCH_SIZE) {
+    if (i > 0) await new Promise((resolve) => setTimeout(resolve, 5000));
+    const batch = namesArr.slice(i, i + BATCH_SIZE);
+    const results = await Promise.all(batch.map(searchSpotify));
+    spotifySearchResults.push(...results);
+  }
 
   // 5. Combine and deduplicate by Spotify artist ID
   const allArtists = new Map<string, SpotifyArtist>();
