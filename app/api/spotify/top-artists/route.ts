@@ -10,7 +10,7 @@ export async function GET() {
   }
 
   const res = await fetch(
-    "https://api.spotify.com/v1/me/top/artists?limit=10&time_range=medium_term",
+    "https://api.spotify.com/v1/me/top/artists?limit=10&time_range=long_term",
     {
       headers: { Authorization: `Bearer ${accessToken}` },
       next: { revalidate: 0 },
